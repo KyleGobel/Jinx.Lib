@@ -1,0 +1,14 @@
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\obj\Debug\Jinx.Lib.csprojResolveAssemblyReference.cache
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\Jinx.Lib.dll
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\Jinx.Lib.pdb
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\Chronos.dll
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\ServiceStack.Text.dll
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\Sigil.dll
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\StackExchange.Redis.dll
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\ServiceStack.Text.xml
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\Sigil.pdb
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\Sigil.xml
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\StackExchange.Redis.pdb
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\bin\Debug\StackExchange.Redis.xml
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\obj\Debug\Jinx.Lib.dll
+C:\Dev\github.com\KyleGobel\Jinx.Lib\Jinx.Lib\obj\Debug\Jinx.Lib.pdb
