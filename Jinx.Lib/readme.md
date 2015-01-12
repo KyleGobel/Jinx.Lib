@@ -10,6 +10,15 @@ All additional information required to operate on this store will be located und
 
 ##Required Keys for all Stores
 
+``JobTypes``
+
+This key is a hash of all the jobs that should be scheduled for this data store.  An example key would look like
+
+``urn:Users:JobTypes`` and the hash would contain strings of some of the defined job types.  
+
+For example the Bulk Insert to SQL Server job has an ID of  ``BulkInsertToSqlServer``, so if this store is expected to be bulk inserted into sql server,
+this job type would be located in the hash.
+
 ###Store    
 
 Going with our above example of the *Users Store* (with a base key of ``urn:Users``) the data
