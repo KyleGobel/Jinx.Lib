@@ -1,16 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Configuration;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Jinx.Lib;
 using Microsoft.Practices.Unity;
 using Quartz;
 using Quartz.Impl;
 using Quartz.Impl.Matchers;
 using Quartz.Listener;
-using Quartz.Xml.JobSchedulingData20;
 using ServiceStack;
 using ServiceStack.Text;
 using StackExchange.Redis;
@@ -55,27 +53,28 @@ namespace Jinx.Scheduler
 
         private static void TestStuff()
         {
-            var redisDb = Container.Resolve<ConnectionMultiplexer>().GetDatabase();
-            redisDb.SetAdd("Jinx:DataStores:Ids", "Testing:Job1");
+            var redisDb = Container.Resolve<IDatabase>();
+            redisDb.SetAdd("Jinx:DataStores:Ids", "Jinx:DataStores:GoogleCampaigns");
 
-            var testDataStore = new JinxDataStore
+            var googleCampaignsFromSql = new JinxDataStore
             {
-                BaseKey = "Jinx:DataStores:TestingStore",
+                BaseKey = "Jinx:DataStores:GoogleCampaigns",
                 Enabled = true,
-                Name = "Just a test store"
-            };
-            var testingJob = new JinxJob
-            {
-                CronExpression = "0 0/1 * 1/1 * ? *",
-                JobKeyGroup = "Testing",
-                JobKeyName = "Testjob",
-                JobType = "TestJob",
-                TriggerKeyGroup = "Testing",
-                TriggerKeyName = "TestTrigger"
+                Name = "Google Campaigns Transform"
             };
 
-            redisDb.StringSet("Testing:Job1", testDataStore.ToJson());
-            redisDb.HashSet(testDataStore.BaseKey + ":Jobs", "anything", testingJob.ToJson());
+            var testingJob = new JinxJobInfo
+            {
+                CronExpression = "0 0/5 * 1/1 * ? *",
+                JobKeyGroup = "O&OSpend",
+                JobKeyName = "O&OSpendExport",
+                JobType = "SqlServerQuery",
+                TriggerKeyGroup = "O&O",
+                TriggerKeyName = "O&OSpendExportTrigger"
+            };
+
+            redisDb.StringSet("Jinx:DataStores:GoogleCampaigns", googleCampaignsFromSql.ToJson());
+            redisDb.HashSet(googleCampaignsFromSql.BaseKey + ":Jobs", "SqlQueryJob", testingJob.ToJson());
         }
 
         private static void RegisterRedis(IUnityContainer container)
@@ -84,6 +83,7 @@ namespace Jinx.Scheduler
             var connectionMultiplexer = ConnectionMultiplexer.Connect(redisServer);
 
             container.RegisterInstance(connectionMultiplexer);
+            container.RegisterInstance(typeof (IDatabase), container.Resolve<ConnectionMultiplexer>().GetDatabase(2));
         }
     }
 
@@ -91,7 +91,7 @@ namespace Jinx.Scheduler
     {
         public void Execute(IJobExecutionContext context)
         {
-            var redisDb = Program.Container.Resolve<ConnectionMultiplexer>().GetDatabase();
+            var redisDb = Program.Container.Resolve<IDatabase>();
             var dataStoresKeys = redisDb.SetMembers("Jinx:DataStores:Ids");
 
             Program.DataStores = dataStoresKeys.Select(dsKey =>
@@ -101,33 +101,34 @@ namespace Jinx.Scheduler
 
             foreach (var store in Program.DataStores.Where(x => x.Enabled))
             {
-                var jobs = redisDb.HashGetAll(store.BaseKey + ":Jobs")
-                    .Select(x =>((string) x.Value).FromJson<JinxJob>());
+                var jobsHash = redisDb.HashGetAll(store.BaseKey + ":Jobs")
+                    .ToDictionary(x => (string) x.Name, x => ((string) x.Value).FromJson<JinxJobInfo>());
 
-                foreach (var job in jobs)
+
+                foreach (var job in jobsHash.Select(x => Tuple.Create(x.Key, x.Value)))
                 {
-                    var triggerKey = new TriggerKey(job.TriggerKeyName, job.TriggerKeyGroup);
+                    var triggerKey = new TriggerKey(job.Item2.TriggerKeyName, job.Item2.TriggerKeyGroup);
                     var trigger = context.Scheduler.GetTrigger(triggerKey) as ICronTrigger;
 
                     if (trigger == null)
                     {
                         //trigger is wrong or doesn't exits, create it
-                        ScheduleJob(context.Scheduler, job);
+                        ScheduleJob(store, context.Scheduler, job.Item1,job.Item2);
                     }
                     else
                     {
-                        if (trigger.CronExpressionString == job.CronExpression) 
+                        if (trigger.CronExpressionString == job.Item2.CronExpression) 
                             continue;
 
                         //cron expression has changed, update it
                         context.Scheduler.UnscheduleJob(triggerKey);
-                        ScheduleJob(context.Scheduler, job);
+                        ScheduleJob(store,context.Scheduler, job.Item1,job.Item2);
                     }
                 }
             }
         }
 
-        private void ScheduleJob(IScheduler scheduler, JinxJob job)
+        private void ScheduleJob(JinxDataStore store, IScheduler scheduler, string jobHashKey, JinxJobInfo job)
         {
             var jobKey = new JobKey(job.JobKeyName, job.JobKeyGroup);
             var triggerKey = new TriggerKey(job.TriggerKeyName, job.TriggerKeyGroup);
@@ -135,6 +136,12 @@ namespace Jinx.Scheduler
             if (job.JobType == "TestJob")
             {
                 newJob = CreateTestJob(jobKey);
+            }
+            else if (job.JobType == "SqlServerQuery")
+            {
+                var redisDb = Program.Container.Resolve<IDatabase>();
+                var sqlJob = ((string) redisDb.StringGet(store.BaseKey + ":" + job.JobKeyName)).FromJson<SqlServerQueryJinxJob>();
+                newJob = CreateSqlServerQueryJob(sqlJob,jobKey);
             }
 
             ITrigger newTrigger = null;
@@ -154,6 +161,17 @@ namespace Jinx.Scheduler
             scheduler.ScheduleJob(newJob, newTrigger);
         }
 
+        private IJobDetail CreateSqlServerQueryJob(SqlServerQueryJinxJob sqlJob, JobKey key)
+        {
+            var job = JobBuilder.Create<RunSqlServerQueryJob>()
+                .WithIdentity(key)
+                .UsingJobData("query", sqlJob.Query)
+                .UsingJobData("connectionKey", sqlJob.DatabaseConnectionKey)
+                .Build();
+
+            return job;
+        }
+
         private IJobDetail CreateTestJob(JobKey key)
         {
             var job = JobBuilder.Create<TestJob>()
@@ -164,7 +182,7 @@ namespace Jinx.Scheduler
 
     }
 
-    public class JinxJob
+    public class JinxJobInfo 
     {
         public string JobType { get; set; }
         public string JobKeyName { get; set; }
@@ -172,6 +190,12 @@ namespace Jinx.Scheduler
         public string TriggerKeyName { get; set; }
         public string TriggerKeyGroup { get; set; }
         public string CronExpression { get; set; }
+    }
+
+    public class SqlServerQueryJinxJob 
+    {
+        public string DatabaseConnectionKey { get; set; }
+        public string Query { get; set; }
     }
     public class JinxSchedule
     {
@@ -198,6 +222,22 @@ namespace Jinx.Scheduler
         }
     }
 
+    public class RunNodeJob : IJob
+    {
+        public void Execute(IJobExecutionContext context)
+        {
+            var jobKey = context.JobDetail.Key;
+
+        }
+    }
+
+    public class RunSqlServerQueryJob : IJob
+    {
+        public void Execute(IJobExecutionContext context)
+        {
+            
+        }
+    }
     public class BulkInsertSqlServerJob : IJob
     {
         public void Execute(IJobExecutionContext context)
