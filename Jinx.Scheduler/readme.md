@@ -11,16 +11,16 @@ Using these lookup keys it then looks up the DataStore objects which contain the
 
 
 
-It uses the redis key ``Jinx:Schedule``.  
+It uses the redis key ``Jinx:Schedule``.
 
 Every minute it updates the in memory jobs list from the list in redis.
 
-Serialized in redis an example entry in the list might look like this 
+Serialized in redis an example entry in the list might look like this
 ```
-{ 
-    "dataStoreKey": "urn:Users", 
-    "name" : "Users", 
-    "enabled" : "true"
+{
+"dataStoreKey": "urn:Users",
+"name" : "Users",
+"enabled" : "true"
 }
 ```
 
@@ -29,25 +29,32 @@ This specifies that the data store Users is located at ``urn:Users`` and it is e
 
 ###Keys breakdown
 
-#####``Jinx:DataStores:Ids``
+``Jinx:DataStores:Ids``
 
-Holds all the data stores ids in a set, this is know as the ``BaseRedisKey`` they can be pointed anywhere in redis 
+Holds all the data stores ids in a set, this is know as the ``BaseRedisKey`` they can be pointed anywhere in redis
 but standard convention should be something like ``Jinx:DataStores:DataStoreName``
 
-#####``Jinx:DataStores:<DataStoreName> ``
+``Jinx:DataStores:<datastorename>``
 
 The base key for the store, nearly all information about the store or jobs will be stored in a subkey here
 
-#####``Jinx:DataStores:<DataStoreName>:Jobs``
+``Jinx:DataStores:<datastorename>:Jobs``
 
-    This is a hash set, the key of the hash entity can be anything, though if the particular type
-    of job requires additional config, this key value will point to the redis key where the additional data is stored.  
-    The value of the hash entry is a json representation of the ``JinxJobInfo`` class (contains general information 
-    about the job).
+This is a hash set, the key of the hash entity can be anything, though if the particular type
+of job requires additional config, this key value will point to the redis key where the additional data is stored.
+The value of the hash entry is a json representation of the ``JinxJobInfo`` class (contains general information
+about the job).
 
-    This hash value will contain things such as: JobKey, and TriggerKey, CronExpression, and the type of the job.
+This hash value will contain things such as: JobKey, and TriggerKey, CronExpression, and the type of the job.
+Depending on the type of the job their may be additional configuration keys
 
+``Jinx:DataStores<datastorename>:SqlServerQueryConfig``
 
+If on of the entries in the hash set is of type ``SqlServerQuery`` then this key will contain the data required for the job
+Currently this is just json with two keys, ``databaseConnectionKey``, and ``query``, the connection key is a key to the connection string, while the query
+is the actual sql query that will be run.
 
+``Jinx:DataStores<datastorename>:Data``
 
-
+Where the main raw data is stored, typically a list, inserted with a right push, taken out with a left pop.  Depending on the job type, data will either be added
+or removed to this key.

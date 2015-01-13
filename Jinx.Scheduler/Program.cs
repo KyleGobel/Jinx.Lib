@@ -4,11 +4,14 @@ using System.ComponentModel;
 using System.Configuration;
 using System.Linq;
 using Jinx.Lib;
+using Jinx.Scheduler.Jobs;
 using Microsoft.Practices.Unity;
 using Quartz;
 using Quartz.Impl;
 using Quartz.Impl.Matchers;
 using Quartz.Listener;
+using Serilog;
+using Serilog.Events;
 using ServiceStack;
 using ServiceStack.Text;
 using StackExchange.Redis;
@@ -19,9 +22,29 @@ namespace Jinx.Scheduler
     {
         public static IUnityContainer Container;
         public static List<JinxSchedule> JobSchedule;
-        public static List<JinxDataStore> DataStores; 
+        public static List<JinxDataStore> DataStores;
+
+        private static void ConfigureLogging()
+        {
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Verbose()
+                //Sinks
+                .WriteTo.ColoredConsole()
+                .WriteTo.RollingFile(ConfigurationManager.AppSettings.Get("LogPath"), LogEventLevel.Information)
+                //Enrichers
+                .Enrich.WithProperty("AppName", "Jinx Scheduler")
+                .Enrich.WithMachineName()
+#if DEBUG
+                .Enrich.WithProperty("Env", "dev")
+#else
+                .Enrich.WithProperty("Env", "prd")
+#endif
+                .CreateLogger();
+
+        }
         private static void Main(string[] args)
         {
+            ConfigureLogging();
             JsConfig.EmitCamelCaseNames = true;
             JsConfig.PropertyConvention = PropertyConvention.Lenient;
             JobSchedule = new List<JinxSchedule>();
@@ -65,7 +88,7 @@ namespace Jinx.Scheduler
 
             var testingJob = new JinxJobInfo
             {
-                CronExpression = "0 0/5 * 1/1 * ? *",
+                CronExpression = "0/30 * * 1/1 * ? *",
                 JobKeyGroup = "O&OSpend",
                 JobKeyName = "O&OSpendExport",
                 JobType = "SqlServerQuery",
@@ -73,8 +96,15 @@ namespace Jinx.Scheduler
                 TriggerKeyName = "O&OSpendExportTrigger"
             };
 
+            var sqlJob = new SqlServerQueryJinxJob
+            {
+                DatabaseConnectionKey = "PkcMobDb01-Email",
+                Query = "select * from spend",
+            };
+
+            redisDb.StringSet("Jinx:DataStores:GoogleCampaigns:SqlServerQueryConfig", sqlJob.ToJson());
             redisDb.StringSet("Jinx:DataStores:GoogleCampaigns", googleCampaignsFromSql.ToJson());
-            redisDb.HashSet(googleCampaignsFromSql.BaseKey + ":Jobs", "SqlQueryJob", testingJob.ToJson());
+            redisDb.HashSet(googleCampaignsFromSql.BaseKey + ":Jobs", "Jinx:DataStores:GoogleCampaigns:SqlServerQueryConfig", testingJob.ToJson());
         }
 
         private static void RegisterRedis(IUnityContainer container)
@@ -140,8 +170,13 @@ namespace Jinx.Scheduler
             else if (job.JobType == "SqlServerQuery")
             {
                 var redisDb = Program.Container.Resolve<IDatabase>();
-                var sqlJob = ((string) redisDb.StringGet(store.BaseKey + ":" + job.JobKeyName)).FromJson<SqlServerQueryJinxJob>();
-                newJob = CreateSqlServerQueryJob(sqlJob,jobKey);
+                var sqlJob = ((string) redisDb.StringGet(store.BaseKey + ":SqlServerQueryConfig")).FromJson<SqlServerQueryJinxJob>();
+                if (sqlJob == null)
+                {
+                    Log.Error("Couldn't find job object at key {Key} for type {Type}", store.BaseKey + ":SqlServerQueryConfig", "SqlServerQueryConfig");
+                    return;
+                }
+                newJob = CreateSqlServerQueryJob(sqlJob,jobKey, store.BaseKey);
             }
 
             ITrigger newTrigger = null;
@@ -161,12 +196,13 @@ namespace Jinx.Scheduler
             scheduler.ScheduleJob(newJob, newTrigger);
         }
 
-        private IJobDetail CreateSqlServerQueryJob(SqlServerQueryJinxJob sqlJob, JobKey key)
+        private IJobDetail CreateSqlServerQueryJob(SqlServerQueryJinxJob sqlJob, JobKey key, string baseStoreKey)
         {
             var job = JobBuilder.Create<RunSqlServerQueryJob>()
                 .WithIdentity(key)
                 .UsingJobData("query", sqlJob.Query)
                 .UsingJobData("connectionKey", sqlJob.DatabaseConnectionKey)
+                .UsingJobData("baseStore", baseStoreKey)
                 .Build();
 
             return job;
@@ -179,7 +215,6 @@ namespace Jinx.Scheduler
                 .Build();
             return job;
         }
-
     }
 
     public class JinxJobInfo 
@@ -231,13 +266,6 @@ namespace Jinx.Scheduler
         }
     }
 
-    public class RunSqlServerQueryJob : IJob
-    {
-        public void Execute(IJobExecutionContext context)
-        {
-            
-        }
-    }
     public class BulkInsertSqlServerJob : IJob
     {
         public void Execute(IJobExecutionContext context)
@@ -256,13 +284,16 @@ namespace Jinx.Scheduler
 
         public override void JobToBeExecuted(IJobExecutionContext context)
         {
-            Console.WriteLine("Listener: {0} is about to start", context.JobDetail.Key);
+            Serilog.Log.Information("Starting {JobKey}", context.JobDetail.Key);
         }
 
         public override void JobWasExecuted(IJobExecutionContext context, JobExecutionException jobException)
         {
-            Console.WriteLine("Listener: {0} has finished. Exception was {1}", context.JobDetail.Key, jobException);
-            Console.WriteLine("Listener: Run time was {0}", context.JobRunTime);
+            if (jobException != null)
+            {
+                Serilog.Log.Error(jobException.InnerException ?? jobException,"Error in job {JobKey}", context.JobDetail.Key);
+            }
+            Serilog.Log.Information("{JobKey} complete.  Run time was {Runtime}",context.JobDetail.Key, context.JobRunTime);
         }
     }
 }
