@@ -4,8 +4,7 @@ using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
-using System.Runtime.InteropServices;
-using Dapper;
+using Jinx.Lib;
 using Microsoft.Practices.Unity;
 using Quartz;
 using Serilog;
@@ -43,16 +42,16 @@ namespace Jinx.Scheduler.Jobs
             var jobKey = context.JobDetail.Key;
             var dataMap = context.JobDetail.JobDataMap;
 
-            var baseKey = dataMap.GetString("baseStore");
+            var baseKey = dataMap.GetString("baseStoreName");
             var connKey = dataMap.GetString("connectionKey");
             var query = dataMap.GetString("query");
 
             GetDataFromQuery(connKey, query, baseKey);
         }
 
-        public void GetDataFromQuery(string connectionKey, string query, string baseKey)
+        public void GetDataFromQuery(string connectionKey, string query, string baseStoreName)
         {
-            Log.Verbose("Getting data from query {Query}, with a connectionKey of {ConnectionKey} and a redis base key {BaseKey}", query, connectionKey, baseKey);
+            Log.Verbose("Getting data from query {Query}, with a connectionKey of {ConnectionKey} and a redis base store {BaseStoreName}", query, connectionKey, baseStoreName);
             var connStr = ConfigurationManager.ConnectionStrings[connectionKey].ConnectionString;
             var redisDb = Program.Container.Resolve<IDatabase>();
             using (var connection = new SqlConnection(connStr))
@@ -72,7 +71,7 @@ namespace Jinx.Scheduler.Jobs
                             if (jsonData.Count > 500)
                             {
                                 Log.Verbose("Pushing {Count} records to redis.  {TotalRecords} pushed", jsonData.Count, totalCount);
-                                redisDb.ListRightPush(baseKey + ":Data", jsonData.Select(y => (RedisValue)y).ToArray());
+                                redisDb.ListRightPush(RedisKeys.Data(baseStoreName), jsonData.Select(y => (RedisValue)y).ToArray());
                                 jsonData.Clear();
                             }
                         });
@@ -80,7 +79,7 @@ namespace Jinx.Scheduler.Jobs
                     if (jsonData.Any())
                     {
                         Log.Verbose("Pushing {Count} records to redis.  {TotalRecords} pushed", jsonData.Count, totalCount);
-                        redisDb.ListRightPush(baseKey + ":Data", jsonData.Select(y => (RedisValue)y).ToArray());
+                        redisDb.ListRightPush(RedisKeys.Data(baseStoreName), jsonData.Select(y => (RedisValue)y).ToArray());
                         jsonData.Clear();
                     }
                     reader.Close();

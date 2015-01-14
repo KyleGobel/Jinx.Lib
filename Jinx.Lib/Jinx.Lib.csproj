@@ -54,6 +54,7 @@
   <ItemGroup>
     <Compile Include="JinxOps.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RedisKeys.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

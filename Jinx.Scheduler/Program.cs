@@ -76,12 +76,13 @@ namespace Jinx.Scheduler
 
         private static void TestStuff()
         {
+            var keys = new RedisKeys("GoogleCampaigns");
             var redisDb = Container.Resolve<IDatabase>();
-            redisDb.SetAdd("Jinx:DataStores:Ids", "Jinx:DataStores:GoogleCampaigns");
+            redisDb.SetAdd(RedisKeys.Ids, keys.BaseKey());
 
             var googleCampaignsFromSql = new JinxDataStore
             {
-                BaseKey = "Jinx:DataStores:GoogleCampaigns",
+                BaseKeyName = keys.BaseStoreName,
                 Enabled = true,
                 Name = "Google Campaigns Transform"
             };
@@ -102,9 +103,10 @@ namespace Jinx.Scheduler
                 Query = "select * from spend",
             };
 
-            redisDb.StringSet("Jinx:DataStores:GoogleCampaigns:SqlServerQueryConfig", sqlJob.ToJson());
-            redisDb.StringSet("Jinx:DataStores:GoogleCampaigns", googleCampaignsFromSql.ToJson());
-            redisDb.HashSet(googleCampaignsFromSql.BaseKey + ":Jobs", "Jinx:DataStores:GoogleCampaigns:SqlServerQueryConfig", testingJob.ToJson());
+            var sqlServerKey = keys.BaseKey() + ":SqlServerQueryConfig";
+            redisDb.StringSet(sqlServerKey, sqlJob.ToJson());
+            redisDb.StringSet(keys.BaseKey(), googleCampaignsFromSql.ToJson());
+            redisDb.HashSet(keys.Jobs(), sqlServerKey, testingJob.ToJson());
         }
 
         private static void RegisterRedis(IUnityContainer container)
@@ -122,7 +124,7 @@ namespace Jinx.Scheduler
         public void Execute(IJobExecutionContext context)
         {
             var redisDb = Program.Container.Resolve<IDatabase>();
-            var dataStoresKeys = redisDb.SetMembers("Jinx:DataStores:Ids");
+            var dataStoresKeys = redisDb.SetMembers(RedisKeys.Ids);
 
             Program.DataStores = dataStoresKeys.Select(dsKey =>
                 ((string) redisDb.StringGet((string) dsKey))
@@ -131,7 +133,7 @@ namespace Jinx.Scheduler
 
             foreach (var store in Program.DataStores.Where(x => x.Enabled))
             {
-                var jobsHash = redisDb.HashGetAll(store.BaseKey + ":Jobs")
+                var jobsHash = redisDb.HashGetAll(RedisKeys.Jobs(store.BaseKeyName))
                     .ToDictionary(x => (string) x.Name, x => ((string) x.Value).FromJson<JinxJobInfo>());
 
 
@@ -170,13 +172,13 @@ namespace Jinx.Scheduler
             else if (job.JobType == "SqlServerQuery")
             {
                 var redisDb = Program.Container.Resolve<IDatabase>();
-                var sqlJob = ((string) redisDb.StringGet(store.BaseKey + ":SqlServerQueryConfig")).FromJson<SqlServerQueryJinxJob>();
+                var sqlJob = ((string) redisDb.StringGet(jobHashKey)).FromJson<SqlServerQueryJinxJob>();
                 if (sqlJob == null)
                 {
-                    Log.Error("Couldn't find job object at key {Key} for type {Type}", store.BaseKey + ":SqlServerQueryConfig", "SqlServerQueryConfig");
+                    Log.Error("Couldn't find job object at base key name {BaseKeyName} for type {Type}", store.BaseKeyName, "SqlServerQueryConfig");
                     return;
                 }
-                newJob = CreateSqlServerQueryJob(sqlJob,jobKey, store.BaseKey);
+                newJob = CreateSqlServerQueryJob(sqlJob,jobKey, store.BaseKeyName);
             }
 
             ITrigger newTrigger = null;
@@ -196,13 +198,13 @@ namespace Jinx.Scheduler
             scheduler.ScheduleJob(newJob, newTrigger);
         }
 
-        private IJobDetail CreateSqlServerQueryJob(SqlServerQueryJinxJob sqlJob, JobKey key, string baseStoreKey)
+        private IJobDetail CreateSqlServerQueryJob(SqlServerQueryJinxJob sqlJob, JobKey key, string baseStoreName)
         {
             var job = JobBuilder.Create<RunSqlServerQueryJob>()
                 .WithIdentity(key)
                 .UsingJobData("query", sqlJob.Query)
                 .UsingJobData("connectionKey", sqlJob.DatabaseConnectionKey)
-                .UsingJobData("baseStore", baseStoreKey)
+                .UsingJobData("baseStoreName", baseStoreName)
                 .Build();
 
             return job;
@@ -243,7 +245,7 @@ namespace Jinx.Scheduler
     {
         public string Name { get; set; }
         public bool Enabled { get; set; }
-        public string BaseKey { get; set; }
+        public string BaseKeyName { get; set; }
     }
 
     public class TestJob : IJob
