@@ -34,6 +34,16 @@ namespace Jinx.Lib
             return string.Join(Seperator, BasePrefix, dataStoreName, "Data");
         }
 
+        public string JobKey(JobTypes type)
+        {
+            switch (type)
+            {
+                case JobTypes.SqlServerQuery:
+                    return BaseKey(BaseKey()) + Seperator + "SqlServerQuery";
+                default:
+                    return "";
+            }
+        }
         public string Data()
         {
             return Data(BaseStoreName);

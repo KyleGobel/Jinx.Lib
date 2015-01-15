@@ -74,25 +74,36 @@ namespace Jinx.Scheduler
             sched.Start();
         }
 
-        private static void TestStuff()
+        private static void CreateDataStore(string storeName, string longName)
         {
-            var keys = new RedisKeys("GoogleCampaigns");
+            var keys = new RedisKeys(storeName);
             var redisDb = Container.Resolve<IDatabase>();
             redisDb.SetAdd(RedisKeys.Ids, keys.BaseKey());
 
-            var googleCampaignsFromSql = new JinxDataStore
+            var store = new JinxDataStore
             {
                 BaseKeyName = keys.BaseStoreName,
                 Enabled = true,
-                Name = "Google Campaigns Transform"
+                Name = longName
             };
+
+            redisDb.StringSet(keys.BaseKey(), store.ToJson());
+        }
+
+
+            
+        private static void TestStuff()
+        {
+            CreateDataStore("GoogleCampaigns", "Google Campaigns Transform");
+            var keys = new RedisKeys("GoogleCampaigns");
+            var redisDb = Container.Resolve<IDatabase>();
 
             var testingJob = new JinxJobInfo
             {
                 CronExpression = "0/30 * * 1/1 * ? *",
                 JobKeyGroup = "O&OSpend",
                 JobKeyName = "O&OSpendExport",
-                JobType = "SqlServerQuery",
+                JobType = JobTypes.SqlServerQuery.ToString(),
                 TriggerKeyGroup = "O&O",
                 TriggerKeyName = "O&OSpendExportTrigger"
             };
@@ -105,8 +116,34 @@ namespace Jinx.Scheduler
 
             var sqlServerKey = keys.BaseKey() + ":SqlServerQueryConfig";
             redisDb.StringSet(sqlServerKey, sqlJob.ToJson());
-            redisDb.StringSet(keys.BaseKey(), googleCampaignsFromSql.ToJson());
             redisDb.HashSet(keys.Jobs(), sqlServerKey, testingJob.ToJson());
+            CreateTransform("GoogleCampTransform");
+        }
+
+        public static void CreateTransform(string storeName)
+        {
+            var redisDb = Program.Container.Resolve<IDatabase>();
+            var keys = new RedisKeys(storeName);
+
+            var transformKey = keys.BaseKey() + ":Transform";
+
+            var jobInfo = new JinxJobInfo
+            {
+                CronExpression = "0/30 * * 1/1 * ? *",
+                JobKeyGroup = "O&OSpend",
+                JobKeyName = "O&OSpendTransform",
+                JobType = JobTypes.Transform.ToString(),
+                TriggerKeyGroup = "O&O",
+                TriggerKeyName = "O&OSpendTranformTrigger"           
+            };
+            redisDb.HashSet(keys.Jobs(), transformKey, jobInfo.ToJson());
+
+            var transformJob = new TransformJinxJob
+            {
+                DataKey = keys.Data(),
+                TransformJs = "console.log('hey')"
+            };
+            redisDb.StringSet(transformKey, transformJob.ToJson());
         }
 
         private static void RegisterRedis(IUnityContainer container)
@@ -191,7 +228,7 @@ namespace Jinx.Scheduler
             }
             catch (Exception x)
             {
-                Console.Write(x.Message);
+                Log.Error(x, "error creating trigger");
                 throw;
             }
 
@@ -233,6 +270,12 @@ namespace Jinx.Scheduler
     {
         public string DatabaseConnectionKey { get; set; }
         public string Query { get; set; }
+    }
+
+    public class TransformJinxJob
+    {
+        public string TransformJs { get; set; }
+        public string DataKey { get; set; }
     }
     public class JinxSchedule
     {
