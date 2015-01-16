@@ -141,7 +141,7 @@ namespace Jinx.Scheduler
             var transformJob = new TransformJinxJob
             {
                 DataKey = keys.Data(),
-                TransformJs = "console.log('hey')"
+                TransformJs = "function main(data) { console.log('hey'); }"
             };
             redisDb.StringSet(transformKey, transformJob.ToJson());
         }

@@ -9,7 +9,7 @@ if (config.redis.authRequired) {
 }
 
 if (process.argv.length < 3) {
-	console.log("Not enough command line arguments")
+	console.log("Not enough command line arguments, pass in the job key")
 	process.exit(-1);
 }
 
@@ -21,7 +21,16 @@ function xformMain() {
 	var jobKey = process.argv[2];
 	client.get(jobKey, function (err, value) {
 		if (err) throw(error);
-		console.log(value.toString());
+		var dataObj = JSON.parse(value); 
+		eval(dataObj.transformJs);
+
+		//hope they defined a main method :)
+		if (typeof main === 'function') {
+			main();
+		}
+		else {
+			console.log("Couldn't find main function: " + typeof main);
+		}
 	});
 }
 
