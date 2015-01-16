@@ -22,15 +22,41 @@ function xformMain() {
 	client.get(jobKey, function (err, value) {
 		if (err) throw(error);
 		var dataObj = JSON.parse(value); 
-		eval(dataObj.transformJs);
 
-		//hope they defined a main method :)
-		if (typeof main === 'function') {
-			main();
-		}
-		else {
-			console.log("Couldn't find main function: " + typeof main);
-		}
+		console.log(dataObj);
+		var dataKey = dataObj.dataKey;
+
+		eval(dataObj.transformJs);
+		var dataLength = 0;
+		do {
+			client.llen(dataKey, function(err,val) {
+				var dataLength = val;
+				if (dataLength > config.itemsToTakePerIteration) {
+					dataLength = config.ItemsToTakePerIteration;
+				}
+
+				client.lrange(dataKey, 0, dataLength, function(err, vals) {
+					//hope they defined a main method :)
+					if (typeof main === 'function') {
+						var items = main(vals);
+						client.rpush(dataObj.destinationKey, items);
+					}
+					else {
+						console.log("Couldn't find main function: " + typeof main);
+					}
+				});
+
+			});
+		} while (dataLength != 0)
+		//get data
+
+
+
+
+
+
+
+		
 	});
 }
 
