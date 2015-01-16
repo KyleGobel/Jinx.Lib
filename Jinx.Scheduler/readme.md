@@ -1,4 +1,4 @@
-﻿#Jinx Scheduler
+#Jinx Scheduler
 
 ##Scheduler Job
 
@@ -58,3 +58,17 @@ is the actual sql query that will be run.
 
 Where the main raw data is stored, typically a list, inserted with a right push, taken out with a left pop.  Depending on the job type, data will either be added
 or removed to this key.
+
+``Jinx:DataStores:<datastorename>:Transform"``
+
+If one of the values of the hash set in Jobs is of type Transform, this will be the default key of that entry and this will hold information about the transform operation.
+
+Serialized as json an example transform job could look like this
+
+```
+{
+	"dataKey" : "Jinx:DataStores:Users:Data",
+    "transformJs" : "function main(srcItems) { _.map(srcItems, function(i) { return i; }); }"
+}
+```
+The json will contain the key to find the source data, and then the transformJs will hold the javascript function to pipe the data through.
