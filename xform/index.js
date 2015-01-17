@@ -2,8 +2,7 @@ var config = require('./config'),
 	redis = require('redis'),
 	_ = require('lodash'),
 	client = redis.createClient(config.redis.port, config.redis.address, {});
-
-
+	
 if (config.redis.authRequired) {
 	client.auth(config.redis.password, function() {});
 }
@@ -21,16 +20,14 @@ function xformMain() {
 	var jobKey = process.argv[2];
 	client.get(jobKey, function (err, value) {
 		if (err) throw(error);
-		var dataObj = JSON.parse(value); 
-
-		console.log(dataObj);
-		var dataKey = dataObj.dataKey;
+		var dataObj = JSON.parse(value),
+			dataKey = dataObj.dataKey,
+			dataLength = 0;
 
 		eval(dataObj.transformJs);
-		var dataLength = 0;
 		do {
 			client.llen(dataKey, function(err,val) {
-				var dataLength = val;
+				dataLength = val;
 				if (dataLength > config.itemsToTakePerIteration) {
 					dataLength = config.ItemsToTakePerIteration;
 				}
@@ -38,29 +35,33 @@ function xformMain() {
 				client.lrange(dataKey, 0, dataLength, function(err, vals) {
 					//hope they defined a main method :)
 					if (typeof main === 'function') {
-						var items = main(vals);
-						client.rpush(dataObj.destinationKey, items);
+						//turn items into javascript objects
+						console.log("Converting store to JSON objects");
+						var items = _.map(vals, function(i) {return JSON.parse(i);});
+						console.log("Tranforming objects");
+						items = main(items);
+						//turn them back into json
+						console.log("Converting objects to JSON");
+						items = _.map(items, function(i) { return JSON.stringify(i);});
+						items.unshift(dataObj.destinationKey);
+						console.log("Inserting items");
+						client.send_command('rpush',items, function() {
+							console.log('Insertion complete...deleting items from store');
+							client.ltrim(dataKey, dataLength, -1, function(err, val){
+								console.log("All Operations Complete");
+								process.exit(0);
+							})
+						});
+						//client.rpush.apply(dataObj.destinationKey, items);
 					}
 					else {
 						console.log("Couldn't find main function: " + typeof main);
 					}
 				});
-
 			});
 		} while (dataLength != 0)
-		//get data
-
-
-
-
-
-
-
-		
 	});
 }
 
 xformMain();
 
-//list of data
-//var elements = client.lrange(job.dataKey)

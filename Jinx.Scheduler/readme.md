@@ -69,6 +69,9 @@ Serialized as json an example transform job could look like this
 {
 	"dataKey" : "Jinx:DataStores:Users:Data",
     "transformJs" : "function main(srcItems) { _.map(srcItems, function(i) { return i; }); }"
+    "destinationKey" : "Jinx:DataStores:Users:DataOut"
 }
 ```
 The json will contain the key to find the source data, and then the transformJs will hold the javascript function to pipe the data through.
+
+The destinationKey will be a key to wherever the transformed items will be saved to.  

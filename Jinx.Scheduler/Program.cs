@@ -95,6 +95,7 @@ namespace Jinx.Scheduler
         private static void TestStuff()
         {
             CreateDataStore("GoogleCampaigns", "Google Campaigns Transform");
+            CreateDataStore("GoogleCampTransform", "I don't know what i'm doing");
             var keys = new RedisKeys("GoogleCampaigns");
             var redisDb = Container.Resolve<IDatabase>();
 
@@ -140,8 +141,9 @@ namespace Jinx.Scheduler
 
             var transformJob = new TransformJinxJob
             {
-                DataKey = keys.Data(),
-                TransformJs = "function main(data) { console.log('hey'); }"
+                DataKey = "Jinx:DataStores:GoogleCampaigns:Data",
+                TransformJs = "function main(srcItems) { return _.map(srcItems, function(i) { console.log('inserting item ' + i); return  { date : i.date }; }); }",
+                DestinationKey = keys.BaseKey() + ":DataOut"
             };
             redisDb.StringSet(transformKey, transformJob.ToJson());
         }
@@ -217,6 +219,10 @@ namespace Jinx.Scheduler
                 }
                 newJob = CreateSqlServerQueryJob(sqlJob,jobKey, store.BaseKeyName);
             }
+            else if (job.JobType == "Transform")
+            {
+                newJob = CreateTransformJob(jobKey, jobHashKey);
+            }
 
             ITrigger newTrigger = null;
             try
@@ -233,6 +239,16 @@ namespace Jinx.Scheduler
             }
 
             scheduler.ScheduleJob(newJob, newTrigger);
+        }
+
+        private IJobDetail CreateTransformJob(JobKey key,string transformJobRedisKey)
+        {
+            var job = JobBuilder.Create<RunNodeTransformJob>()
+                .WithIdentity(key)
+                .UsingJobData("transformJobKey", transformJobRedisKey)
+                .Build();
+
+            return job;
         }
 
         private IJobDetail CreateSqlServerQueryJob(SqlServerQueryJinxJob sqlJob, JobKey key, string baseStoreName)
@@ -272,10 +288,18 @@ namespace Jinx.Scheduler
         public string Query { get; set; }
     }
 
+    public class SqlServerBulkInsertJinxJob
+    {
+        public Dictionary<string, string> PropertyToColumnMappings { get; set; } 
+        public string DataKey { get; set; }
+        public string DatabaseConnectionKey { get; set; }
+    }
+
     public class TransformJinxJob
     {
         public string TransformJs { get; set; }
         public string DataKey { get; set; }
+        public string DestinationKey { get; set; }
     }
     public class JinxSchedule
     {
@@ -302,16 +326,7 @@ namespace Jinx.Scheduler
         }
     }
 
-    public class RunNodeJob : IJob
-    {
-        public void Execute(IJobExecutionContext context)
-        {
-            var jobKey = context.JobDetail.Key;
-
-        }
-    }
-
-    public class BulkInsertSqlServerJob : IJob
+    public class RunSqlServerBulkInsertJob : IJob
     {
         public void Execute(IJobExecutionContext context)
         {
