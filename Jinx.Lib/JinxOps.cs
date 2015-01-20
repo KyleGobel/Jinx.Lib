@@ -1,9 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using Chronos;
 using Chronos.Configuration;
 using Chronos.Dapper.Chronos.Dapper;
+using Jinx.Scheduler;
 using ServiceStack;
 using ServiceStack.Text;
 using StackExchange.Redis;
@@ -65,6 +68,38 @@ namespace Jinx.Lib
             }
         }
 
+        public static void LogHistoryEvent(IDatabase redisDb, object payload)
+        {
+            redisDb.ListLeftPush("HistoryLog", payload.ToJson());
+        }
+
+        public static void CreateSqlServerQueryJob(string query, string cronExpression, string connectionStringKey, string storeKey, string groupName = null, string jobName = null)
+        {
+            var multiplex = ConnectionMultiplexer.Connect(ConfigUtilities.GetAppSetting("Redis"));
+            IDatabase redisDb = multiplex.GetDatabase(db: int.Parse(ConfigUtilities.GetAppSetting("RedisDatabase")));
+
+            var keys = new RedisKeys(storeKey);
+            redisDb.ListLeftPush(RedisKeys.Ids, keys.BaseKey());
+
+            var triggerName = jobName != null ? jobName + "Trigger" : Guid.NewGuid().ToString("N");
+            var job = new JinxJobInfo
+            {
+                JobType = "SqlServerQuery",
+                JobKeyGroup = groupName ?? Guid.NewGuid().ToString("N"),
+                JobKeyName =  jobName ?? Guid.NewGuid().ToString("N"),
+                TriggerKeyGroup =  groupName ?? Guid.NewGuid().ToString("N"),
+                TriggerKeyName = triggerName,
+                CronExpression = cronExpression
+            };
+
+            var keyToSqlServerJob = keys.JobKey(JobTypes.SqlServerQuery);
+
+            redisDb.HashSet(keys.Jobs(), keyToSqlServerJob, job.ToJson());
+
+            redisDb.StringSet(keyToSqlServerJob,
+                (new SqlServerQueryJinxJob {DatabaseConnectionKey = connectionStringKey, Query = query}).ToJson());
+        }
+
         public void InsertToRedisFromSqlQuery(IDatabase redisDb, string baseRedisKey,
             IJinxRedisConfiguration redisConfig = null)
         {
@@ -73,7 +108,7 @@ namespace Jinx.Lib
             var connectionStringKey = "";
             var query = "";
 
-            var connStr = ConfigUtilities.GetConnectionStringFromNameOrConnectionString(connectionStringKey);
+            var connStr = ConfigUtilities.GetConnectionString(connectionStringKey);
             
             using (var connection = new SqlConnection(connStr))
             {
@@ -108,7 +143,7 @@ namespace Jinx.Lib
             var mappingsDict = redisDb.HashGetAll(mappingsKey).ToDictionary(x => (string)x.Name, x => (string)x.Value);
             var bcp = new SqlServerBulkInserter(configDict[redisConfig.ConfigHashDatabaseTypeKey])
             {
-                ColumnMappings = new BulkInsertColumnMappings()
+                ColumnMappings = new Mappings()
                     .ClearMappings()
                     .AddStringDictionary(mappingsDict)
             };

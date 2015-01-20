@@ -30,8 +30,15 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Chronos">
-      <HintPath>..\packages\Chronos.0.0.92\lib\Chronos.dll</HintPath>
+    <Reference Include="Chronos, Version=0.0.95.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Chronos.0.0.95\lib\Chronos.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Security">
+      <HintPath>..\packages\Npgsql.2.0.14.3\lib\net45\Mono.Security.dll</HintPath>
+    </Reference>
+    <Reference Include="Npgsql">
+      <HintPath>..\packages\Npgsql.2.0.14.3\lib\net45\Npgsql.dll</HintPath>
     </Reference>
     <Reference Include="ServiceStack.Text">
       <HintPath>..\packages\ServiceStack.Text.4.0.35\lib\net40\ServiceStack.Text.dll</HintPath>
@@ -52,14 +59,24 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\IJinxDataRepo.cs" />
+    <Compile Include="Data\PostgresDataRepo.cs" />
+    <Compile Include="EventTypes.cs" />
+    <Compile Include="JinxJobInfo.cs" />
     <Compile Include="JinxOps.cs" />
     <Compile Include="JobTypes.cs" />
+    <Compile Include="Models\JinxJob.cs" />
+    <Compile Include="Models\JobDetail.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RedisKeys.cs" />
+    <Compile Include="SqlServerQueryJinxJob.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="readme.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Data\db_init.sql" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

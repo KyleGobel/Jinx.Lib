@@ -2,9 +2,10 @@ var config = {};
 
 config.redis = {
 	port: 6379,
-	address: '',
+	address: 'localhost',
 	authRequired : false,
-	password: ''
+	password: '',
+	database: 2
 };
 
 

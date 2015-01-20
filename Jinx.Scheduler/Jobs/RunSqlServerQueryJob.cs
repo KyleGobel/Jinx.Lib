@@ -42,7 +42,7 @@ namespace Jinx.Scheduler.Jobs
             var jobKey = context.JobDetail.Key;
             var dataMap = context.JobDetail.JobDataMap;
 
-            var baseKey = dataMap.GetString("baseStoreName");
+            var baseKey = dataMap.GetString("redisStorageKey");
             var connKey = dataMap.GetString("connectionKey");
             var query = dataMap.GetString("query");
 
@@ -53,7 +53,7 @@ namespace Jinx.Scheduler.Jobs
         {
             Log.Verbose("Getting data from query {Query}, with a connectionKey of {ConnectionKey} and a redis base store {BaseStoreName}", query, connectionKey, baseStoreName);
             var connStr = ConfigurationManager.ConnectionStrings[connectionKey].ConnectionString;
-            var redisDb = Program.Container.Resolve<IDatabase>();
+            var redisDb = Globals.Ioc.Resolve<IDatabase>();
             using (var connection = new SqlConnection(connStr))
             {
                 connection.Open();
