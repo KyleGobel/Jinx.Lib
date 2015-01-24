@@ -32,6 +32,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Chronos, Version=0.0.95.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Chronos.0.0.95\lib\Chronos.dll</HintPath>
+    </Reference>
     <Reference Include="Common.Logging">
       <HintPath>..\packages\Common.Logging.2.3.1\lib\net40\Common.Logging.dll</HintPath>
     </Reference>
@@ -81,6 +85,8 @@
   <ItemGroup>
     <Compile Include="Globals.cs" />
     <Compile Include="JobHistoryListener.cs" />
+    <Compile Include="Jobs\ExecutePostgresSqlJob.cs" />
+    <Compile Include="Jobs\JinxJobBase.cs" />
     <Compile Include="NodeExecutor.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

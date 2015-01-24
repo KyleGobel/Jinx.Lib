@@ -114,35 +114,8 @@ namespace Jinx.Scheduler
             var sqlServerKey = keys.BaseKey() + ":SqlServerQueryConfig";
             redisDb.StringSet(sqlServerKey, sqlJob.ToJson());
             redisDb.HashSet(keys.Jobs(), sqlServerKey, testingJob.ToJson());
-            CreateTransform("GoogleCampTransform");
         }
 
-        public static void CreateTransform(string storeName)
-        {
-            var redisDb = Globals.Ioc.Resolve<IDatabase>();
-            var keys = new RedisKeys(storeName);
-
-            var transformKey = keys.BaseKey() + ":Transform";
-
-            var jobInfo = new JinxJobInfo
-            {
-                CronExpression = "0/30 * * 1/1 * ? *",
-                JobKeyGroup = "O&OSpend",
-                JobKeyName = "O&OSpendTransform",
-                JobType = JobTypes.Transform.ToString(),
-                TriggerKeyGroup = "O&O",
-                TriggerKeyName = "O&OSpendTranformTrigger"           
-            };
-            redisDb.HashSet(keys.Jobs(), transformKey, jobInfo.ToJson());
-
-            var transformJob = new TransformJinxJob
-            {
-                DataKey = "Jinx:DataStores:GoogleCampaigns:Data",
-                TransformJs = "function main(srcItems) { return _.map(srcItems, function(i) { console.log('inserting item ' + i); return  { date : i.date }; }); }",
-                DestinationKey = keys.BaseKey() + ":DataOut"
-            };
-            redisDb.StringSet(transformKey, transformJob.ToJson());
-        }
 
         private static void Configure(IUnityContainer container)
         {

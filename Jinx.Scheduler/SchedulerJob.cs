@@ -47,16 +47,28 @@ namespace Jinx.Scheduler
         {
             var data = Globals.Ioc.Resolve<IJinxDataRepo>();
             IJobDetail details = null;
-            switch (job.JobType)
+            var jt = JobTypes.FromName(job.JobType);
+            var dictionary = data.GetJobDetail(job.JobId);
+            if (jt == JobTypes.SqlServerQuery)
             {
-                case "SqlServerQuery":
-                    var dictionary = data.GetJobDetail(job.JobId);
-                    details = JobBuilder.Create<RunSqlServerQueryJob>()
-                        .WithIdentity(job.JobKeyName, job.JobKeyGroup)
-                        .WithDescription(job.Description)
-                        .Build();
-                    dictionary.ForEach(x => details.JobDataMap.Add(x));
-                    break;
+                details = JobBuilder.Create<RunSqlServerQueryJob>()
+                    .WithIdentity(job.JobKeyName, job.JobKeyGroup)
+                    .WithDescription(job.Description)
+                    .Build();
+            }
+            else if (jt == JobTypes.ExecutePostgresSql)
+            {
+                details = JobBuilder.Create<ExecutePostgresSqlJob>()
+                    .WithIdentity(job.JobKeyName, job.JobKeyGroup)
+                    .WithDescription(job.Description)
+                    .Build();
+            }
+
+            //add jobId to all jobs
+            if (details != null)
+            {
+                dictionary.ForEach(x => details.JobDataMap.Add(x));
+                details.JobDataMap.Add("jobId", job.JobId);
             }
             return details;
         }

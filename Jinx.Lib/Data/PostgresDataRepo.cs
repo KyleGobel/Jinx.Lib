@@ -52,12 +52,35 @@ namespace Jinx.Lib.Data
 
         public void LogEvent(EventTypes eventType, object data = null)
         {
+            const string sql = "insert into events (timestamp, event_name, data) values (@timestamp, @eventName, @data)";
             using (var connection = new NpgsqlConnection(_connectionString))
             {
                 connection.Open();
-                connection.Execute(
-                    "insert into events (timestamp, event_name, data) values (@timestamp, @eventName, @data)",
-                    new {timestamp = DateTime.UtcNow, eventName = eventType.ToString(), data = data.ToJson()});
+                connection.Execute(sql, new
+                {
+                    timestamp = DateTime.UtcNow,
+                    eventName = eventType.ToString(),
+                    data = data.ToJson()
+                });
+            }
+        }
+
+        public void LogJobHistory(int jobId, TimeSpan runTime, JobTypes jobType,object jobData = null, object exceptionData = null)
+        {
+            const string sql = @"insert into job_history (job_id,timestamp, job_type,run_time, job_data, exception_data) values (@jobId,@timestamp,@jobType, @runTime, @jobData, @exceptionData)";
+
+            using (var connection = new NpgsqlConnection(_connectionString))
+            {
+                connection.Open();
+                connection.Execute(sql, new
+                {
+                    jobId,
+                    timestamp = DateTime.UtcNow,
+                    runTime = runTime.TotalMilliseconds,
+                    jobType = jobType.Name,
+                    jobData = jobData.ToJson(),
+                    exceptionData = exceptionData.ToJson()
+                });
             }
         }
     }

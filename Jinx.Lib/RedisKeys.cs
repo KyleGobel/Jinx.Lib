@@ -36,13 +36,7 @@ namespace Jinx.Lib
 
         public string JobKey(JobTypes type)
         {
-            switch (type)
-            {
-                case JobTypes.SqlServerQuery:
-                    return BaseKey(BaseKey()) + Seperator + "SqlServerQuery";
-                default:
-                    return "";
-            }
+            return "";
         }
         public string Data()
         {

@@ -34,12 +34,15 @@ namespace Jinx.Scheduler.Jobs
             }
         }
     }
-    public class RunSqlServerQueryJob : IJob
+    public class RunSqlServerQueryJob : JinxJobBase
     {
         private static readonly ILogger Log = Serilog.Log.ForContext<RunSqlServerQueryJob>();
-        public void Execute(IJobExecutionContext context)
+
+        public RunSqlServerQueryJob() : base(JobTypes.SqlServerQuery)
+        { }
+
+        public override void ExecuteJob(IJobExecutionContext context)
         {
-            var jobKey = context.JobDetail.Key;
             var dataMap = context.JobDetail.JobDataMap;
 
             var baseKey = dataMap.GetString("redisStorageKey");

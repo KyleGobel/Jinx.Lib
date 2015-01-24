@@ -1,7 +1,7 @@
 ﻿--Table Creation
 --******************--
 
-drop table jobs;
+drop table if exists jobs;
 create table jobs (
 	job_id serial primary key not null,
 	job_details_id int4,
@@ -17,18 +17,29 @@ create table jobs (
 	cron_expression text
 );
 
-drop table job_details;
+drop table if exists job_details;
 create table job_details (
 	job_details_id serial primary key not null,
 	details text not null
 );
 
-drop table events;
+drop table if exists events;
 create table events (
 	event_id serial primary key not null,
-	timestamp timestamp,
+	timestamp timestamp not null,
 	event_name text not null,
 	data text
+);
+
+drop table if exists job_history;
+create table job_history (
+	job_history_id serial primary key not null,
+	job_id int not null,
+	timestamp timestamp not null,
+	job_type text,
+	job_data text,
+	run_time int8,
+	exception_data text
 );
 
 

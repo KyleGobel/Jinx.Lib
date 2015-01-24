@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using Jinx.Lib;
+using Jinx.Lib.Data;
 using Microsoft.Practices.Unity;
 using Quartz;
 using Quartz.Listener;
@@ -17,15 +19,16 @@ namespace Jinx.Scheduler
         }
 
         private readonly IDatabase _redisDb;
+        private readonly IJinxDataRepo _data;
         public JobHistoryListener()
         {
             _redisDb = Globals.Ioc.Resolve<IDatabase>();
+            _data = Globals.Ioc.Resolve<IJinxDataRepo>();
         }
 
         public override void JobToBeExecuted(IJobExecutionContext context)
         {
             var e = new {Message = "Starting Job", JobQuartzKey = context.JobDetail.Key};
-            JinxOps.LogHistoryEvent(_redisDb,e);
             Serilog.Log.Information("Starting {JobKey}", context.JobDetail.Key);
 
         }
@@ -34,29 +37,32 @@ namespace Jinx.Scheduler
         {
             if (jobException != null)
             {
-                var ex = GetLowestException(jobException);
-                var e = new
-                {
-                    Message = "Error in job",
-                    JobQuartzKey = context.JobDetail.Key,
-                    ExceptionType = ex.GetType().Name,
-                    ExceptionMessage = ex.Message,
-                    FullExceptionDetails = ex.ToString()
-                };
-                JinxOps.LogHistoryEvent(_redisDb, e);
                 Serilog.Log.Error(jobException.InnerException ?? jobException,"Error in job {JobKey}", context.JobDetail.Key);
             }
-            var endMsg = new
-            {
-                Message = "Job complete",
-                RunTime = context.JobRunTime.ToString("g"),
-                JobQuartzKey = context.JobDetail.Key
-            };
-            JinxOps.LogHistoryEvent(_redisDb, endMsg);
+
             Serilog.Log.Information("{JobKey} complete.  Run time was {Runtime}", context.JobDetail.Key,
                 context.JobRunTime);
+
+            var map = context.JobDetail.JobDataMap.ToDictionary(x => x.Key, x => x.Value);
+            if (map.ContainsKey("jobId") && map.ContainsKey("jobType"))
+            {
+                _data.LogJobHistory((int)map["jobId"],context.JobRunTime,JobTypes.FromName(map["jobType"].ToString()), map, GetExceptionData(jobException));
+            }
         }
 
+        private object GetExceptionData(Exception ex)
+        {
+            if (ex == null)
+                return null;
+            ex = ex.GetInnerMostException();
+
+            return new
+            {
+                Type = ex.GetType().FullName,
+                StackTrace = ex.StackTrace,
+                Message = ex.Message,
+            };
+        }
         private Exception GetLowestException(Exception jobException)
         {
             if (jobException.InnerException == null)
